@@ -9,14 +9,24 @@ var ROOT = __dirname,
     initialPath;
 
 http.createServer(function (req, res) {
+
     sendFile(url.parse(req.url, true).pathname, res, req);
+
 }).listen(3000, '127.0.0.1');
+
 console.log('Server running at http://127.0.0.1:3000/');
 
+function errorCb(res) {
+
+    res.statusCode = 500;
+    res.end('Server error!');
+
+}
 
 function sendFile(filePath, res, req) {
 
     initialPath = filePath;
+
     try {
         filePath = decodeURIComponent(filePath);
     } catch (e) {
@@ -38,16 +48,25 @@ function sendFile(filePath, res, req) {
     }
 
     fs.stat(filePath, function (err, stats) {
-        var pattern = initialPath.match(/^\/api\/users(\/(\w+))?/);
-        if (pattern && pattern[0]) {
-            var body = '',
 
-                id = pattern[2];
+        var pattern;
+
+        pattern = initialPath.match(/^\/api\/users(\/(\w+))?/);
+
+        if (pattern && pattern[0]) {
+
+            var body = '',
+                id = pattern[2],
+                file;
 
             if (req.method === 'GET') {
-                id = pattern[2];
+
                 if (id) {
                     db.getById(id, function (err, data) {
+                        if (err) {
+                            errorCb(res);
+                            return;
+                        }
                         res.statusCode = 200;
                         res.setHeader('Content-Type', 'application/json; charset=utf-8');
                         res.end(JSON.stringify(data));
@@ -60,99 +79,96 @@ function sendFile(filePath, res, req) {
                     res.end(JSON.stringify(db));
                 });
                 return;
+
             }
 
             if (req.method === 'POST') {
+
                 body = '';
-                req
-                    .on('readable', function () {
+                req.on('readable', function () {
                         body += req.read();
                     })
                     .on('end', function () {
                         body = JSON.parse(body);
-                        db.create(body, function () {
+                        db.create(body, function (err, model) {
+                            if (err) {
+                                errorCb(res);
+                                return;
+                            }
                             res.statusCode = 200;
                             res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                            res.end(JSON.stringify(db));
+                            res.end(JSON.stringify(model));
                         });
                     });
                 return;
+
             }
 
             if (req.method === 'PUT') {
 
                 body = '';
-                req
-                    .on('readable', function () {
+                req.
+                    on('readable', function () {
                         body += req.read();
                     })
                     .on('end', function () {
                         body = JSON.parse(body);
-                        db.update(body, function () {
+                        db.update(body, function (err, model) {
+                            if (err) {
+                                errorCb(res);
+                                return;
+                            }
                             res.statusCode = 200;
                             res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                            res.end(JSON.stringify(db));
+                            res.end(JSON.stringify(model));
                         });
                     });
                 return;
+
             }
 
             if (req.method === 'DELETE') {
-                db.remove(id, function () {
+
+                db.remove(id, function (err) {
+                    if (err) {
+                        errorCb(res);
+                        return;
+                    }
                     res.statusCode = 200;
                     res.setHeader('Content-Type', 'application/json; charset=utf-8');
                     res.end(JSON.stringify(db));
                 });
                 return;
+
             }
+
         }
 
         if (err) {
             res.statusCode = 404;
-            res.end('Not found');
+            res.end('File not found!');
             return;
         }
 
         if (stats.isFile()) {
+
             if (initialPath !== '/' && !/^\/public\//.test(initialPath)) {
                 res.statusCode = 403;
-                res.end('access is denied!');
+                res.end('Access is denied!');
                 return;
             }
 
-            var file = fs.createReadStream(filePath);
-            var contentType = mime.lookup(filePath);
-            res.setHeader('Content-Type', contentType + "; charset=utf-8");
+            file = fs.createReadStream(filePath);
+            res.setHeader('Content-Type', mime.lookup(filePath) + "; charset=utf-8");
             file.pipe(res);
 
             file.on('error', function () {
-                res.statusCode = 500;
-                res.end('Server error!');
-                console.log('Server error!');
-            });
-
-            file.on('close', function () {
-                res.statusCode = 200;
-                res.end('ee');
-            });
-
-            file.on('end', function () {
-                res.statusCode = 200;
-                res.end('ee');
+                errorCb(res);
             });
 
             res.on('close', function () {
                 file.destroy();
             });
-
-            //another variant of stream
-            //fs.readFile(filePath, function (err, content) {
-            //    if (err) throw err;
-            //
-            //    var contentType = mime.lookup(filePath);
-            //    res.setHeader('Content-Type', contentType + "; charset=utf-8");
-            //    res.end(content);
-            //});
         }
     });
 }

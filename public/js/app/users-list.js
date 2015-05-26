@@ -19,11 +19,11 @@ define([
         initialize: function(){
             this.listenTo(this.users, 'sync', this.render);
             this.users.fetch();
-            this._userForm = new UserForm()
+            this._userForm = new UserForm();
 
             this.listenTo(this.users, 'destroy', function(){
                 this.users.fetch();
-            })
+            });
 
             this.listenTo(Backbone.Events, 'userWasSaved', function(){
                 this.users.fetch();
